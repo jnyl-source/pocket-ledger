@@ -207,6 +207,16 @@
   .pform-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .pform-foot .grow { flex: 1; font-size: 12px; color: var(--muted); }
   .pform .hint { font-size: 12px; color: var(--muted); }
+  .pform .hint b { color: var(--ink); }
+  .pform .hint .warn { color: var(--expense-ink); }
+  .checkline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+  .checkline input { width: 16px; height: 16px; }
+  #p-confirm { display: none; align-items: center; gap: 6px; font-size: 13px; }
+  #p-confirm:not([hidden]) { display: inline-flex; }
+  .tagbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tx.tagging { cursor: default; }
+  .tx select.tx-pocket { grid-column: 2; max-width: 240px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+  .tx.tagging:hover { background: transparent; }
 
   /* Panels */
   .row2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
@@ -485,10 +495,12 @@
         <div class="field"><label for="p-open">Balance</label><input class="num" id="p-open" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
         <div class="field"><label for="p-since">on</label><input id="p-since" type="date"></div>
       </div>
-      <div class="hint">Entries you tag to this pocket, dated after that day, are added and subtracted from this balance.</div>
+      <label class="checkline"><input type="checkbox" id="p-all"> Count every entry I tag to this pocket, whatever its date</label>
+      <div class="hint" id="p-link">Entries you tag to this pocket, dated after that day, are added to and taken off this balance.</div>
       <div class="err" id="p-err" aria-live="polite"></div>
       <div class="pform-foot">
         <button class="btn danger" type="button" id="p-delete" hidden>Delete pocket</button>
+        <span class="confirm" id="p-confirm" hidden><span id="p-confirm-text">Delete this pocket?</span> <button class="btn danger" type="button" id="p-delete-yes">Yes, delete</button><button class="btn quiet" type="button" id="p-delete-no">Keep</button></span>
         <span class="grow"></span>
         <button class="btn quiet" type="button" id="p-cancel">Cancel</button>
         <button class="btn primary" type="submit" id="p-save">Save pocket</button>
@@ -552,6 +564,8 @@
           <button type="button" data-f="income" aria-pressed="false">Income</button>
           <button type="button" data-f="expense" aria-pressed="false">Expenses</button>
         </div>
+        <select class="ctl" id="pfilter" aria-label="Filter by pocket" hidden></select>
+        <button class="btn" type="button" id="tagmode" hidden>🏷️ Tag pockets</button>
         <input class="ctl search" id="search" type="search" placeholder="Search notes or categories">
       </div>
     </div>
@@ -691,6 +705,8 @@
     ratesUpdated: '',
     pockets: [],            // {id, name, emoji, currency, opening, since} — accounts you keep money in
     editingPocket: null,
+    pocketFilter: '',       // '' every entry, 'none' only untagged, otherwise a pocket id
+    tagging: false,         // ledger shows a pocket picker on each entry
     editing: null,
     loaded: false,
     sample: false,
@@ -919,8 +935,12 @@
       const { bal, unknown, monthDelta } = pocketBalance(list, p);
       const r = rateFor(p.currency);
       if (r) total += bal * r; else totalKnown = false;
+      const tagged = list.filter((t) => t.pocket === p.id);
+      const skipped = p.since ? tagged.filter((t) => t.date <= p.since).length : 0;
       const sub = [
         p.currency !== state.currency ? `${flag(p.currency)} ${p.currency}` : '',
+        tagged.length ? `🔗 ${tagged.length} tagged` : '',
+        skipped ? `${skipped} before ${p.since} not counted` : '',
         monthDelta ? `${monthDelta > 0 ? '+' : '−'}${money(Math.abs(monthDelta), p.currency)} in ${ymLabel(state.ym, true)}` : '',
         unknown ? `${unknown} entr${unknown === 1 ? 'y' : 'ies'} need a rate` : '',
       ].filter(Boolean).join('  ·  ');
@@ -941,20 +961,46 @@
     sel.innerHTML = opts;
     sel.value = selected && pocketById(selected) ? selected : (includeNone ? '' : (state.pockets[0] ? state.pockets[0].id : ''));
   }
+  // Says, in plain numbers, how this pocket and your entries are connected — and warns
+  // when tagged entries sit before the cut-off date and are therefore left out.
+  function updateLinkHint() {
+    const p = state.editingPocket;
+    const countAll = $('p-all').checked;
+    const since = $('p-since').value;
+    $('p-since').disabled = countAll;
+    if (!p) {
+      $('p-link').innerHTML = countAll
+        ? 'Every entry you tag to this pocket will count, however old.'
+        : 'Entries you tag to this pocket, dated after that day, are added to and taken off this balance.';
+      return;
+    }
+    const tagged = state.tx.filter((t) => t.pocket === p.id);
+    const skipped = countAll ? [] : tagged.filter((t) => since && t.date <= since);
+    let msg = `🔗 <b>${tagged.length}</b> ${tagged.length === 1 ? 'entry is' : 'entries are'} tagged to this pocket.`;
+    if (skipped.length) msg += ` <span class="warn">${skipped.length} of them ${skipped.length === 1 ? 'is' : 'are'} dated on or before ${esc(since)}, so ${skipped.length === 1 ? 'it is' : 'they are'} not counted.</span> Tick the box above, or set an earlier date, to include ${skipped.length === 1 ? 'it' : 'them'}.`;
+    else if (tagged.length) msg += ' All of them adjust the balance.';
+    else msg += ' Tag some in the entry list below with 🏷️ Tag pockets.';
+    $('p-link').innerHTML = msg;
+  }
   function openPocketForm(p) {
     state.editingPocket = p || null;
     $('move-form').hidden = true;
     $('pocket-form').hidden = false;
     $('p-err').textContent = '';
+    $('p-confirm').hidden = true;
     $('p-emoji').value = p ? (p.emoji || '') : '';
     $('p-name').value = p ? p.name : '';
     fillCurrencySelect($('p-cur'), p ? p.currency : state.currency);
     $('p-open').value = p ? p.opening : '';
+    $('p-all').checked = !!(p && !p.since);
     $('p-since').value = p && p.since ? p.since : todayISO();
     $('p-delete').hidden = !p;
     $('p-save').textContent = p ? 'Save changes' : 'Add pocket';
+    updateLinkHint();
     setTimeout(() => $('p-name').focus(), 50);
   }
+  $('p-all').addEventListener('change', updateLinkHint);
+  $('p-since').addEventListener('change', updateLinkHint);
   async function savePockets() {
     await saveSettings();
     render();
@@ -972,12 +1018,12 @@
     const since = $('p-since').value;
     if (!name) { $('p-err').textContent = 'Give the pocket a name.'; $('p-name').focus(); return; }
     if (!isFinite(opening)) { $('p-err').textContent = 'Enter a balance, or 0.'; $('p-open').focus(); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) { $('p-err').textContent = 'Pick the date that balance is from.'; $('p-since').focus(); return; }
+    if (!$('p-all').checked && !/^\d{4}-\d{2}-\d{2}$/.test(since)) { $('p-err').textContent = 'Pick the date that balance is from, or tick the box to count every entry.'; $('p-since').focus(); return; }
     const p = state.editingPocket;
     const next = {
       id: p ? p.id : 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       name, emoji: $('p-emoji').value.trim() || '🏦', currency: $('p-cur').value,
-      opening: Math.round(opening * 100) / 100, since,
+      opening: Math.round(opening * 100) / 100, since: $('p-all').checked ? '' : since,
     };
     if (p) state.pockets = state.pockets.map((x) => (x.id === p.id ? next : x));
     else state.pockets = [...state.pockets, next];
@@ -985,13 +1031,25 @@
     await savePockets();
     toast(`${next.emoji} ${p ? 'Pocket updated' : 'Pocket added'}`);
   });
-  $('p-delete').addEventListener('click', async () => {
+  // Asked and answered inside the page: a browser confirm() box is blocked in the app's sandbox.
+  $('p-delete').addEventListener('click', () => {
     const p = state.editingPocket;
     if (!p) return;
     const tagged = state.tx.filter((t) => t.pocket === p.id).length;
-    if (!window.confirm(`Delete "${p.name}"?${tagged ? `\n\n${tagged} entr${tagged === 1 ? 'y stays' : 'ies stay'} in your ledger, just untagged.` : ''}`)) return;
+    $('p-confirm-text').textContent = tagged
+      ? `Delete "${p.name}"? ${tagged} ${tagged === 1 ? 'entry stays' : 'entries stay'} in your ledger, just untagged.`
+      : `Delete "${p.name}"?`;
+    $('p-delete').hidden = true;
+    $('p-confirm').hidden = false;
+  });
+  $('p-delete-no').addEventListener('click', () => { $('p-confirm').hidden = true; $('p-delete').hidden = false; });
+  $('p-delete-yes').addEventListener('click', async () => {
+    const p = state.editingPocket;
+    if (!p) return;
     state.pockets = state.pockets.filter((x) => x.id !== p.id);
-    $('pocket-form').hidden = true; state.editingPocket = null;
+    if (state.pocketFilter === p.id) state.pocketFilter = '';
+    $('pocket-form').hidden = true; $('p-confirm').hidden = true; $('p-delete').hidden = false;
+    state.editingPocket = null;
     await savePockets();
     toast('🗑️ Pocket deleted');
   });
@@ -1060,6 +1118,8 @@
     renderStrip(list, ym);
     renderStats(list, ym);
     renderPockets(list);
+    renderPocketControls();
+    if (!$('pocket-form').hidden) updateLinkHint();
     renderChart(list, ym);
     renderCats(list, ym);
     renderLedger(list, ym);
@@ -1214,13 +1274,17 @@
     let rows = list.filter((t) => ymOf(t.date) === ym);
     if (state.filter !== 'all') rows = rows.filter((t) => t.type === state.filter);
     if (q) rows = rows.filter((t) => (t.note || '').toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
+    if (state.pocketFilter === 'none') rows = rows.filter((t) => !t.pocket || !pocketById(t.pocket));
+    else if (state.pocketFilter) rows = rows.filter((t) => t.pocket === state.pocketFilter);
     rows.sort((a, b) => (b.date.localeCompare(a.date)) || (b.createdAt - a.createdAt));
+    const tagMode = state.tagging && state.pockets.length > 0;
     $('ledger-title').textContent = `📒 ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} in ${ymLabel(ym, true)}`;
     const el = $('ledger');
     if (!rows.length) {
-      el.innerHTML = `<div class="empty">${q || state.filter !== 'all' ? 'Nothing matches this filter 🔍' : 'No entries yet this month. Add one to get started 🌱'}</div>`;
+      el.innerHTML = `<div class="empty">${q || state.filter !== 'all' || state.pocketFilter ? 'Nothing matches this filter 🔍' : 'No entries yet this month. Add one to get started 🌱'}</div>`;
       return;
     }
+    const pocketPicker = (t) => `<select class="tx-pocket" data-id="${esc(t.id)}" aria-label="Pocket for this entry"><option value="">— pick a pocket —</option>${state.pockets.map((p) => `<option value="${esc(p.id)}"${t.pocket === p.id ? ' selected' : ''}>${esc(p.emoji || '🏦')} ${esc(p.name)}</option>`).join('')}</select>`;
     const byDay = new Map();
     for (const t of rows) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date).push(t); }
     let html = '';
@@ -1230,7 +1294,7 @@
       for (const t of items) {
         const sign = t.type === 'income' ? '+' : '–';
         const sub = !isForeign(t) ? '' : hasRate(t) ? `<small>≈ ${esc(money(baseAmt(t)))}</small>` : `<small class="warn">rate needed</small>`;
-        html += `<button type="button" class="tx ${t.type}" data-id="${esc(t.id)}"><span class="dot" aria-hidden="true">${emo(t.category, t.type)}</span><span><span class="cat">${esc(t.category)}${t.sample ? '<span class="chip">example</span>' : ''}${isForeign(t) ? `<span class="chip">${flag(t.currency)} ${esc(t.currency)}</span>` : ''}${t.pocket && pocketById(t.pocket) ? `<span class="chip">${esc(pocketById(t.pocket).emoji || '🏦')} ${esc(pocketById(t.pocket).name)}</span>` : ''}</span></span><span class="amt num">${sign}${esc(money(t.amount, t.currency || state.currency))}${sub}</span><span class="note">${esc(t.note || '')}</span></button>`;
+        html += `<${tagMode ? 'div' : 'button type="button"'} class="tx ${t.type}${tagMode ? ' tagging' : ''}" data-id="${esc(t.id)}"><span class="dot" aria-hidden="true">${emo(t.category, t.type)}</span><span><span class="cat">${esc(t.category)}${t.sample ? '<span class="chip">example</span>' : ''}${isForeign(t) ? `<span class="chip">${flag(t.currency)} ${esc(t.currency)}</span>` : ''}${t.pocket && pocketById(t.pocket) ? `<span class="chip">${esc(pocketById(t.pocket).emoji || '🏦')} ${esc(pocketById(t.pocket).name)}</span>` : ''}</span></span><span class="amt num">${sign}${esc(money(t.amount, t.currency || state.currency))}${sub}</span>${tagMode ? pocketPicker(t) : `<span class="note">${esc(t.note || '')}</span>`}</${tagMode ? 'div' : 'button'}>`;
       }
       html += '</div>';
     }
@@ -1688,10 +1752,45 @@
   document.querySelectorAll('input[name="type"]').forEach((r) => r.addEventListener('change', () => fillCategories(r.value, null)));
   $('f-category').addEventListener('change', () => { const c = $('f-category').value === '__custom'; $('f-custom-wrap').hidden = !c; if (c) $('f-custom').focus(); });
   $('ledger').addEventListener('click', (e) => {
+    if (state.tagging) return;                       // in tagging mode the row is a picker, not a link
     const b = e.target.closest('.tx'); if (!b) return;
     const tx = visibleTx().find((t) => t.id === b.dataset.id);
     if (tx) openDrawer(tx);
   });
+  // Tagging mode: choosing a pocket on a row saves that entry straight away.
+  $('ledger').addEventListener('change', async (e) => {
+    const sel = e.target.closest('select.tx-pocket'); if (!sel) return;
+    const tx = state.tx.find((t) => t.id === sel.dataset.id); if (!tx) return;
+    const next = { ...tx };
+    if (sel.value && pocketById(sel.value)) next.pocket = sel.value; else delete next.pocket;
+    sel.disabled = true;
+    try {
+      await store.put(next);
+      const p = pocketById(sel.value);
+      toast(p ? `🏷️ Tagged to ${p.emoji || '🏦'} ${p.name}` : '🏷️ Pocket removed');
+    } catch (ex) { toast('Could not save that. Try again.'); console.error(ex); }
+    finally { sel.disabled = false; }
+  });
+  $('tagmode').addEventListener('click', () => {
+    state.tagging = !state.tagging;
+    $('tagmode').textContent = state.tagging ? '✅ Done tagging' : '🏷️ Tag pockets';
+    $('tagmode').classList.toggle('primary', state.tagging);
+    render();
+  });
+  $('pfilter').addEventListener('change', () => { state.pocketFilter = $('pfilter').value; render(); });
+  // Keeps the pocket filter and the tagging button in step with the pockets you have.
+  let pctrlSig = '';
+  function renderPocketControls() {
+    const has = state.pockets.length > 0;
+    $('pfilter').hidden = !has;
+    $('tagmode').hidden = !has;
+    const sig = state.pockets.map((p) => p.id + p.emoji + p.name).join('|') + '#' + state.pocketFilter;
+    if (!has || sig === pctrlSig) return;
+    pctrlSig = sig;
+    $('pfilter').innerHTML = '<option value="">👛 All pockets</option><option value="none">— untagged —</option>'
+      + state.pockets.map((p) => `<option value="${esc(p.id)}">${esc(p.emoji || '🏦')} ${esc(p.name)}</option>`).join('');
+    $('pfilter').value = state.pocketFilter;
+  }
   document.querySelectorAll('.seg [data-f]').forEach((b) => b.addEventListener('click', () => {
     state.filter = b.dataset.f;
     document.querySelectorAll('.seg [data-f]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
