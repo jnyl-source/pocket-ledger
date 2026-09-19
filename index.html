@@ -187,6 +187,27 @@
   .meter { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
   .meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; width: 0; }
 
+  /* Pockets */
+  .pockets { display: grid; gap: 8px; }
+  .prow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 10px 14px; color: inherit; }
+  .prow:hover { border-color: var(--muted); background: var(--surface-2); }
+  .prow .pemoji { font-size: 22px; grid-row: span 2; width: 38px; height: 38px; display: grid; place-items: center; background: var(--surface-2); border-radius: 12px; }
+  .prow:hover .pemoji { background: var(--surface); }
+  .prow .pname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prow .psub { grid-column: 2; font-size: 12px; color: var(--muted); }
+  .prow .pbal { grid-row: span 2; text-align: right; font-size: 17px; font-weight: 600; }
+  .prow .pbal small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .prow .pbal.neg { color: var(--expense-ink); }
+  .pocket-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .ptotal { font-weight: 600; color: var(--ink); }
+  .pform { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+  .pform-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  .pform-grid .field { flex: 1 1 130px; min-width: 0; }
+  .pform-grid .field.narrow { flex: 0 0 92px; }
+  .pform-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pform-foot .grow { flex: 1; font-size: 12px; color: var(--muted); }
+  .pform .hint { font-size: 12px; color: var(--muted); }
+
   /* Panels */
   .row2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
@@ -445,6 +466,51 @@
     <div class="tile"><div class="lbl">Saved 🐷</div><div class="val num" id="s-rate">–</div><div class="meter"><i id="s-meter"></i></div><div class="sub" id="s-rate-sub">of income kept</div></div>
   </section>
 
+  <section class="panel" id="pockets-panel">
+    <div class="panel-head">
+      <h3>👛 My pockets</h3>
+      <span class="legend" id="pockets-total"></span>
+    </div>
+    <div class="pockets" id="pockets"></div>
+    <div class="pocket-actions">
+      <button class="btn" type="button" id="pocket-add">➕ Add pocket</button>
+      <button class="btn" type="button" id="pocket-move" hidden>⇄ Move money</button>
+    </div>
+
+    <form class="pform" id="pocket-form" hidden>
+      <div class="pform-grid">
+        <div class="field narrow"><label for="p-emoji">Icon</label><input id="p-emoji" maxlength="4" placeholder="🏦" autocomplete="off"></div>
+        <div class="field"><label for="p-name">Name</label><input id="p-name" maxlength="30" placeholder="Bangkok Bank" autocomplete="off"></div>
+        <div class="field narrow"><label for="p-cur">Currency</label><select id="p-cur"></select></div>
+        <div class="field"><label for="p-open">Balance</label><input class="num" id="p-open" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label for="p-since">on</label><input id="p-since" type="date"></div>
+      </div>
+      <div class="hint">Entries you tag to this pocket, dated after that day, are added and subtracted from this balance.</div>
+      <div class="err" id="p-err" aria-live="polite"></div>
+      <div class="pform-foot">
+        <button class="btn danger" type="button" id="p-delete" hidden>Delete pocket</button>
+        <span class="grow"></span>
+        <button class="btn quiet" type="button" id="p-cancel">Cancel</button>
+        <button class="btn primary" type="submit" id="p-save">Save pocket</button>
+      </div>
+    </form>
+
+    <form class="pform" id="move-form" hidden>
+      <div class="pform-grid">
+        <div class="field"><label for="mv-from">From</label><select id="mv-from"></select></div>
+        <div class="field"><label for="mv-to">To</label><select id="mv-to"></select></div>
+        <div class="field"><label for="mv-amount">Amount</label><input class="num" id="mv-amount" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="field"><label for="mv-date">Date</label><input id="mv-date" type="date"></div>
+      </div>
+      <div class="err" id="mv-err" aria-live="polite"></div>
+      <div class="pform-foot">
+        <span class="grow" id="mv-preview">Moving money between your own pockets does not count as income or expense.</span>
+        <button class="btn quiet" type="button" id="mv-cancel">Cancel</button>
+        <button class="btn primary" type="submit">Move money</button>
+      </div>
+    </form>
+  </section>
+
   <div class="row2">
     <section class="panel">
       <div class="panel-head">
@@ -532,6 +598,10 @@
         <input id="f-date" type="date" required>
       </div>
     </div>
+    <div class="field" id="f-pocket-wrap" hidden>
+      <label for="f-pocket">Pocket <span style="font-weight:400;color:var(--muted)">(which account this moved through)</span></label>
+      <select id="f-pocket"></select>
+    </div>
     <div class="field" id="f-custom-wrap" hidden>
       <label for="f-custom">Custom category</label>
       <input id="f-custom" type="text" maxlength="40" placeholder="e.g. Pet care">
@@ -582,7 +652,7 @@
   };
   const EMOJI = {
     Food: '🍜', Transport: '🚌', Housing: '🏠', Utilities: '💡', Education: '📚', Work: '💼', Health: '💊', Shopping: '🛍️', Family: '👨‍👩‍👧', Other: '✨',
-    Salary: '💰', Freelance: '🧑‍💻', Translation: '🌐', Reimbursement: '🔁',
+    Salary: '💰', Freelance: '🧑‍💻', Translation: '🌐', Reimbursement: '🔁', Transfer: '⇄',
     Groceries: '🛒', Dining: '🍽️', Entertainment: '🎬', Subscriptions: '📺', Travel: '✈️', Gifts: '🎁', Investments: '📈', Business: '🏪', Refunds: '🔁',
   };
   const emo = (cat, type) => EMOJI[cat] || (type === 'income' ? '💵' : '🏷️');
@@ -619,6 +689,8 @@
     payCycle: 'previous',   // 'previous': income received last month funds this month's expenses; 'same': calendar month
     rates: {},              // code → how many units of the home currency one unit of `code` buys
     ratesUpdated: '',
+    pockets: [],            // {id, name, emoji, currency, opening, since} — accounts you keep money in
+    editingPocket: null,
     editing: null,
     loaded: false,
     sample: false,
@@ -671,11 +743,13 @@
       id: t.id, user_id: userId, type: t.type, amount: t.amount, currency: t.currency || state.currency,
       rate: t.rate > 0 ? t.rate : null, rate_base: t.rate > 0 ? (t.rateBase || null) : null,
       category: t.category, note: t.note || '', date: t.date, created_at: t.createdAt || 0, deleted: !!deleted,
+      pocket: t.pocket || null, transfer: !!t.transfer,
     });
     const fromRow = (r) => ({
       id: r.id, type: r.type, amount: Number(r.amount), currency: r.currency || state.currency,
       ...(Number(r.rate) > 0 ? { rate: Number(r.rate), rateBase: r.rate_base || undefined } : {}),
       category: r.category || 'Other', note: r.note || '', date: String(r.date).slice(0, 10), createdAt: Number(r.created_at) || 0,
+      ...(r.pocket ? { pocket: r.pocket } : {}), ...(r.transfer ? { transfer: true } : {}),
     });
     const emit = () => { save(CACHE_KEY, cache); if (cb) cb(cache.tx.slice()); };
     async function flush() {
@@ -803,9 +877,164 @@
   function visibleTx() { return state.sample ? sampleData() : state.tx; }
   function rawTotals(list, ym) {
     let inc = 0, exp = 0;
-    for (const t of list) if (ymOf(t.date) === ym) { if (t.type === 'income') inc += baseAmt(t); else exp += baseAmt(t); }
+    // Moving money between your own pockets is not earning or spending, so it is left out.
+    for (const t of list) if (ymOf(t.date) === ym && !t.transfer) { if (t.type === 'income') inc += baseAmt(t); else exp += baseAmt(t); }
     return { inc, exp };
   }
+
+  // ---------- pockets ----------
+  const pocketById = (id) => state.pockets.find((p) => p.id === id) || null;
+  // An entry's value expressed in a pocket's own currency, or null when no rate is known.
+  function inPocketCur(t, cur) {
+    const tc = t.currency || state.currency;
+    if (tc === cur) return t.amount;
+    if (!hasRate(t)) return null;
+    const r = rateFor(cur);
+    return r ? baseAmt(t) / r : null;
+  }
+  // Balance = the figure you entered, plus every tagged entry dated after that day.
+  function pocketBalance(list, p) {
+    let bal = Number(p.opening) || 0, unknown = 0, monthDelta = 0;
+    for (const t of list) {
+      if (t.pocket !== p.id) continue;
+      if (p.since && t.date <= p.since) continue;
+      const v = inPocketCur(t, p.currency);
+      if (v == null) { unknown++; continue; }
+      const signed = t.type === 'income' ? v : -v;
+      bal += signed;
+      if (ymOf(t.date) === state.ym) monthDelta += signed;
+    }
+    return { bal, unknown, monthDelta };
+  }
+  function renderPockets(list) {
+    const el = $('pockets'), ps = state.pockets;
+    $('pocket-move').hidden = ps.length < 2;
+    if (!ps.length) {
+      el.innerHTML = '<div class="empty">No pockets yet. Add one for each account or wallet where you keep money 👛</div>';
+      $('pockets-total').textContent = '';
+      return;
+    }
+    let total = 0, totalKnown = true;
+    el.innerHTML = ps.map((p) => {
+      const { bal, unknown, monthDelta } = pocketBalance(list, p);
+      const r = rateFor(p.currency);
+      if (r) total += bal * r; else totalKnown = false;
+      const sub = [
+        p.currency !== state.currency ? `${flag(p.currency)} ${p.currency}` : '',
+        monthDelta ? `${monthDelta > 0 ? '+' : '−'}${money(Math.abs(monthDelta), p.currency)} in ${ymLabel(state.ym, true)}` : '',
+        unknown ? `${unknown} entr${unknown === 1 ? 'y' : 'ies'} need a rate` : '',
+      ].filter(Boolean).join('  ·  ');
+      const approx = (p.currency !== state.currency && r) ? `<small>≈ ${esc(money(bal * r))}</small>` : '';
+      return `<button type="button" class="prow" data-p="${esc(p.id)}">
+        <span class="pemoji" aria-hidden="true">${esc(p.emoji || '🏦')}</span>
+        <span class="pname">${esc(p.name)}</span>
+        <span class="pbal num${bal < 0 ? ' neg' : ''}">${esc(money(bal, p.currency))}${approx}</span>
+        <span class="psub">${esc(sub) || '&nbsp;'}</span>
+      </button>`;
+    }).join('');
+    $('pockets-total').innerHTML = `<span class="ptotal num">${esc(money(total))}${totalKnown ? '' : ' +'}</span>&nbsp;in total`;
+  }
+
+  function fillPocketOptions(sel, selected, includeNone) {
+    const opts = (includeNone ? '<option value="">— no pocket —</option>' : '')
+      + state.pockets.map((p) => `<option value="${esc(p.id)}">${esc(p.emoji || '🏦')} ${esc(p.name)}</option>`).join('');
+    sel.innerHTML = opts;
+    sel.value = selected && pocketById(selected) ? selected : (includeNone ? '' : (state.pockets[0] ? state.pockets[0].id : ''));
+  }
+  function openPocketForm(p) {
+    state.editingPocket = p || null;
+    $('move-form').hidden = true;
+    $('pocket-form').hidden = false;
+    $('p-err').textContent = '';
+    $('p-emoji').value = p ? (p.emoji || '') : '';
+    $('p-name').value = p ? p.name : '';
+    fillCurrencySelect($('p-cur'), p ? p.currency : state.currency);
+    $('p-open').value = p ? p.opening : '';
+    $('p-since').value = p && p.since ? p.since : todayISO();
+    $('p-delete').hidden = !p;
+    $('p-save').textContent = p ? 'Save changes' : 'Add pocket';
+    setTimeout(() => $('p-name').focus(), 50);
+  }
+  async function savePockets() {
+    await saveSettings();
+    render();
+  }
+  $('pocket-add').addEventListener('click', () => openPocketForm(null));
+  $('p-cancel').addEventListener('click', () => { $('pocket-form').hidden = true; state.editingPocket = null; });
+  $('pockets').addEventListener('click', (e) => {
+    const b = e.target.closest('.prow');
+    if (b) openPocketForm(pocketById(b.dataset.p));
+  });
+  $('pocket-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('p-name').value.trim();
+    const opening = parseFloat($('p-open').value || '0');
+    const since = $('p-since').value;
+    if (!name) { $('p-err').textContent = 'Give the pocket a name.'; $('p-name').focus(); return; }
+    if (!isFinite(opening)) { $('p-err').textContent = 'Enter a balance, or 0.'; $('p-open').focus(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) { $('p-err').textContent = 'Pick the date that balance is from.'; $('p-since').focus(); return; }
+    const p = state.editingPocket;
+    const next = {
+      id: p ? p.id : 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name, emoji: $('p-emoji').value.trim() || '🏦', currency: $('p-cur').value,
+      opening: Math.round(opening * 100) / 100, since,
+    };
+    if (p) state.pockets = state.pockets.map((x) => (x.id === p.id ? next : x));
+    else state.pockets = [...state.pockets, next];
+    $('pocket-form').hidden = true; state.editingPocket = null;
+    await savePockets();
+    toast(`${next.emoji} ${p ? 'Pocket updated' : 'Pocket added'}`);
+  });
+  $('p-delete').addEventListener('click', async () => {
+    const p = state.editingPocket;
+    if (!p) return;
+    const tagged = state.tx.filter((t) => t.pocket === p.id).length;
+    if (!window.confirm(`Delete "${p.name}"?${tagged ? `\n\n${tagged} entr${tagged === 1 ? 'y stays' : 'ies stay'} in your ledger, just untagged.` : ''}`)) return;
+    state.pockets = state.pockets.filter((x) => x.id !== p.id);
+    $('pocket-form').hidden = true; state.editingPocket = null;
+    await savePockets();
+    toast('🗑️ Pocket deleted');
+  });
+
+  // Move money: one pair of entries, marked as a transfer so they never count as income or expense.
+  function openMoveForm() {
+    $('pocket-form').hidden = true;
+    $('move-form').hidden = false;
+    $('mv-err').textContent = '';
+    fillPocketOptions($('mv-from'), state.pockets[0] && state.pockets[0].id, false);
+    fillPocketOptions($('mv-to'), state.pockets[1] && state.pockets[1].id, false);
+    $('mv-amount').value = '';
+    $('mv-date').value = todayISO();
+    setTimeout(() => $('mv-amount').focus(), 50);
+  }
+  $('pocket-move').addEventListener('click', openMoveForm);
+  $('mv-cancel').addEventListener('click', () => { $('move-form').hidden = true; });
+  $('move-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const from = pocketById($('mv-from').value), to = pocketById($('mv-to').value);
+    const amount = Math.round(parseFloat($('mv-amount').value) * 100) / 100;
+    const date = $('mv-date').value;
+    const err = $('mv-err');
+    if (!from || !to || from.id === to.id) { err.textContent = 'Pick two different pockets.'; return; }
+    if (!(amount > 0)) { err.textContent = 'Enter an amount greater than zero.'; $('mv-amount').focus(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { err.textContent = 'Pick a date.'; return; }
+    const rf = rateFor(from.currency), rt = rateFor(to.currency);
+    if (!rf || !rt) { err.textContent = `Add a rate for ${!rf ? from.currency : to.currency} in 💱 Currencies in hand first.`; return; }
+    const amountTo = Math.round((amount * rf / rt) * 100) / 100;
+    const now = Date.now();
+    const leg = (type, pocket, amt, cur, note, i) => ({
+      id: uid(), type, amount: amt, currency: cur, category: 'Transfer', note, date, createdAt: now + i,
+      pocket: pocket.id, transfer: true,
+      ...(cur !== state.currency ? { rate: rateFor(cur), rateBase: state.currency } : {}),
+    });
+    try {
+      await store.put(leg('expense', from, amount, from.currency, `→ ${to.name}`, 0));
+      await store.put(leg('income', to, amountTo, to.currency, `← ${from.name}`, 1));
+      $('move-form').hidden = true;
+      state.ym = ymOf(date);
+      toast(`⇄ ${money(amount, from.currency)} moved to ${to.name}`);
+    } catch (ex) { err.textContent = 'Could not save the move. Try again.'; console.error(ex); }
+  });
   // The month's budget: expenses of `ym` against the income that funds it
   // (last month's pay when payCycle is 'previous', otherwise the same month).
   const fundingYM = (ym) => (state.payCycle === 'previous' ? shiftYM(ym, -1) : ym);
@@ -830,6 +1059,7 @@
 
     renderStrip(list, ym);
     renderStats(list, ym);
+    renderPockets(list);
     renderChart(list, ym);
     renderCats(list, ym);
     renderLedger(list, ym);
@@ -969,7 +1199,7 @@
   function renderCats(list, ym) {
     const map = new Map();
     let total = 0;
-    for (const t of list) if (t.type === 'expense' && ymOf(t.date) === ym) { const v = baseAmt(t); map.set(t.category, (map.get(t.category) || 0) + v); total += v; }
+    for (const t of list) if (t.type === 'expense' && !t.transfer && ymOf(t.date) === ym) { const v = baseAmt(t); map.set(t.category, (map.get(t.category) || 0) + v); total += v; }
     const el = $('cats');
     $('cat-total').textContent = total ? `${money(total)} spent` : '';
     if (!total) { el.innerHTML = '<div class="empty">No expenses recorded this month 🌱</div>'; return; }
@@ -995,12 +1225,12 @@
     for (const t of rows) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date).push(t); }
     let html = '';
     for (const [date, items] of byDay) {
-      const net = items.reduce((s, t) => s + (t.type === 'income' ? baseAmt(t) : -baseAmt(t)), 0);
+      const net = items.reduce((s, t) => s + (t.transfer ? 0 : t.type === 'income' ? baseAmt(t) : -baseAmt(t)), 0);
       html += `<div class="day"><div class="day-head"><b>${esc(dayLabel(date))}</b><span class="num">${net < 0 ? '–' : '+'}${esc(money(Math.abs(net)))}</span></div>`;
       for (const t of items) {
         const sign = t.type === 'income' ? '+' : '–';
         const sub = !isForeign(t) ? '' : hasRate(t) ? `<small>≈ ${esc(money(baseAmt(t)))}</small>` : `<small class="warn">rate needed</small>`;
-        html += `<button type="button" class="tx ${t.type}" data-id="${esc(t.id)}"><span class="dot" aria-hidden="true">${emo(t.category, t.type)}</span><span><span class="cat">${esc(t.category)}${t.sample ? '<span class="chip">example</span>' : ''}${isForeign(t) ? `<span class="chip">${flag(t.currency)} ${esc(t.currency)}</span>` : ''}</span></span><span class="amt num">${sign}${esc(money(t.amount, t.currency || state.currency))}${sub}</span><span class="note">${esc(t.note || '')}</span></button>`;
+        html += `<button type="button" class="tx ${t.type}" data-id="${esc(t.id)}"><span class="dot" aria-hidden="true">${emo(t.category, t.type)}</span><span><span class="cat">${esc(t.category)}${t.sample ? '<span class="chip">example</span>' : ''}${isForeign(t) ? `<span class="chip">${flag(t.currency)} ${esc(t.currency)}</span>` : ''}${t.pocket && pocketById(t.pocket) ? `<span class="chip">${esc(pocketById(t.pocket).emoji || '🏦')} ${esc(pocketById(t.pocket).name)}</span>` : ''}</span></span><span class="amt num">${sign}${esc(money(t.amount, t.currency || state.currency))}${sub}</span><span class="note">${esc(t.note || '')}</span></button>`;
       }
       html += '</div>';
     }
@@ -1124,6 +1354,8 @@
     fillCurrencySelect($('f-currency'), src && src.currency ? src.currency : state.currency);
     $('f-rate').value = src && src.rate > 0 && (!src.rateBase || src.rateBase === state.currency) ? src.rate : '';
     updateRateRow();
+    $('f-pocket-wrap').hidden = state.pockets.length === 0;
+    fillPocketOptions($('f-pocket'), src ? src.pocket : '', true);
     $('f-date').value = src ? src.date : todayISO();
     $('f-note').value = src ? src.note || '' : '';
     $('f-custom').value = '';
@@ -1159,6 +1391,8 @@
       createdAt: state.editing ? state.editing.createdAt : Date.now(),
       currency,
       ...(foreign ? { rate, rateBase: state.currency } : {}),
+      ...($('f-pocket').value && pocketById($('f-pocket').value) ? { pocket: $('f-pocket').value } : {}),
+      ...(state.editing && state.editing.transfer ? { transfer: true } : {}),
     };
     $('f-save').disabled = true;
     try {
@@ -1183,7 +1417,7 @@
     const rows = state.tx.slice().sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
     const cell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const base = state.currency;
-    const csv = [`date,type,category,amount,currency,rate_to_${base},amount_${base},note`, ...rows.map((t) => [t.date, t.type, t.category, t.amount.toFixed(2), t.currency || base, isForeign(t) ? (baseAmt(t) / t.amount || '').toString() : '1', hasRate(t) ? baseAmt(t).toFixed(2) : '', t.note].map(cell).join(','))].join('\n');
+    const csv = [`date,type,category,amount,currency,rate_to_${base},amount_${base},pocket,transfer,note`, ...rows.map((t) => [t.date, t.type, t.category, t.amount.toFixed(2), t.currency || base, isForeign(t) ? (baseAmt(t) / t.amount || '').toString() : '1', hasRate(t) ? baseAmt(t).toFixed(2) : '', (pocketById(t.pocket) || {}).name || '', t.transfer ? 'yes' : '', t.note].map(cell).join(','))].join('\n');
     const filename = `pocket-ledger-${todayISO()}.csv`;
     if (downloads) {
       try {
@@ -1234,7 +1468,7 @@
     if (rows.length < 2) { toast('That file has no entries.'); return; }
     const head = rows[0].map((h) => h.trim().toLowerCase());
     const col = (name) => head.findIndex((h) => h === name || h.startsWith(name));
-    const iDate = col('date'), iType = col('type'), iCat = col('category'), iAmt = col('amount'), iCur = col('currency'), iRate = col('rate_to_'), iNote = col('note');
+    const iDate = col('date'), iType = col('type'), iCat = col('category'), iAmt = col('amount'), iCur = col('currency'), iRate = col('rate_to_'), iNote = col('note'), iPocket = col('pocket'), iTransfer = col('transfer');
     if (iDate < 0 || iType < 0 || iAmt < 0) { toast('Need at least date, type and amount columns.'); return; }
     const existing = new Set(state.tx.map((t) => [t.date, t.type, t.amount, t.category, t.currency || state.currency, t.note || ''].join('|')));
     let added = 0, skipped = 0, bad = 0;
@@ -1248,7 +1482,12 @@
       if (existing.has(key)) { skipped++; continue; }
       existing.add(key);
       const rate = iRate >= 0 ? parseFloat(r[iRate]) : NaN;
-      const tx = { id: uid(), type, amount, category, date, note, createdAt: Date.now() + added, currency, ...(currency !== state.currency && rate > 0 ? { rate, rateBase: state.currency } : {}) };
+      const pName = iPocket >= 0 ? (r[iPocket] || '').trim().toLowerCase() : '';
+      const pocket = pName ? state.pockets.find((p) => p.name.toLowerCase() === pName) : null;
+      const tx = { id: uid(), type, amount, category, date, note, createdAt: Date.now() + added, currency,
+        ...(currency !== state.currency && rate > 0 ? { rate, rateBase: state.currency } : {}),
+        ...(pocket ? { pocket: pocket.id } : {}),
+        ...(iTransfer >= 0 && /^(yes|true|1)$/i.test((r[iTransfer] || '').trim()) ? { transfer: true } : {}) };
       try { await store.put(tx); added++; } catch (ex) { bad++; console.error(ex); }
     }
     toast(`📥 Imported ${added}${skipped ? `, skipped ${skipped} already here` : ''}${bad ? `, ${bad} unreadable` : ''}`);
@@ -1304,6 +1543,14 @@
     const allCats = [...new Set([...CATS.expense, ...CATS.income])];
     const hash = text.match(/#([a-z]+)/i);
     if (hash) { const c = allCats.find((x) => x.toLowerCase() === hash[1].toLowerCase()); if (c) { category = c; text = text.replace(hash[0], ' '); } }
+    // pocket: "@bank" picks the pocket whose name starts with that word
+    let pocket = null;
+    const at = text.match(/@([\p{L}\d_-]+)/u);
+    if (at) {
+      const want = at[1].toLowerCase();
+      const p = state.pockets.find((x) => x.name.toLowerCase().replace(/\s+/g, '').startsWith(want)) || state.pockets.find((x) => x.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(want)));
+      if (p) { pocket = p.id; text = text.replace(at[0], ' '); }
+    }
     // date
     const dp = parseDateToken(text);
     text = dp.rest;
@@ -1331,9 +1578,9 @@
     if (!CATS[type].includes(category)) category = 'Other';
     // note: leftover words
     const note = text.replace(/[+\-฿$]/g, ' ').split(/\s+/).filter((w) => w && !FILLER.has(w.toLowerCase())).join(' ').replace(/^[\s,.;:-]+|[\s,.;:-]+$/g, '');
-    return { ok: true, type, amount, currency, category, date: dp.date, note: note ? note.charAt(0).toUpperCase() + note.slice(1) : '' };
+    return { ok: true, type, amount, currency, category, pocket, date: dp.date, note: note ? note.charAt(0).toUpperCase() + note.slice(1) : '' };
   }
-  const chipHTML = (p) => `<span class="pv ${p.type}"><i></i>${emo(p.category, p.type)} <b>${p.type === 'income' ? 'Income' : 'Expense'}</b><span class="sep">·</span><span class="num">${esc(money(p.amount, p.currency))}${p.currency !== state.currency ? ` ≈ ${esc(money(p.amount * p.rate))}` : ''}</span><span class="sep">·</span>${esc(p.category)}${p.note ? `<span class="sep">·</span>${esc(p.note)}` : ''}${p.date !== todayISO() ? `<span class="sep">·</span>${esc(dayLabel(p.date))}` : ''}</span>`;
+  const chipHTML = (p) => `<span class="pv ${p.type}"><i></i>${emo(p.category, p.type)} <b>${p.type === 'income' ? 'Income' : 'Expense'}</b><span class="sep">·</span><span class="num">${esc(money(p.amount, p.currency))}${p.currency !== state.currency ? ` ≈ ${esc(money(p.amount * p.rate))}` : ''}</span><span class="sep">·</span>${esc(p.category)}${p.pocket && pocketById(p.pocket) ? `<span class="sep">·</span>${esc(pocketById(p.pocket).emoji || '🏦')} ${esc(pocketById(p.pocket).name)}` : ''}${p.note ? `<span class="sep">·</span>${esc(p.note)}` : ''}${p.date !== todayISO() ? `<span class="sep">·</span>${esc(dayLabel(p.date))}` : ''}</span>`;
 
   function splitQuick(raw) {
     return raw.split(/\n|;|,\s+(?=[^,]*\d)/).map((s) => s.trim()).filter(Boolean);
@@ -1342,7 +1589,8 @@
   let sampleFn = null;
   async function parseWithClaude(raw) {
     const prompt = `Today is ${todayISO()}. Parse this personal finance message into JSON entries. Message: """${raw}"""\n` +
-      `Return ONLY a JSON array. Each item: {"type":"income"|"expense","amount":number,"currency":"ISO 4217 code","category":string,"date":"YYYY-MM-DD","note":string}. ` +
+      `Return ONLY a JSON array. Each item: {"type":"income"|"expense","amount":number,"currency":"ISO 4217 code","category":string,"date":"YYYY-MM-DD","note":string,"pocket":string}. `
+      + (state.pockets.length ? `Pockets (accounts), use the exact name or leave empty: ${state.pockets.map((p) => p.name).join(', ')}. ` : '') +
       `Expense categories: ${CATS.expense.join(', ')}. Income categories: ${CATS.income.join(', ')}. ` +
       `Amounts are ${state.currency} unless the message names another currency (RMB/yuan/¥ = CNY, A$ = AUD). Default type is expense, default date is today. Keep notes short (what it was for).`;
     const out = await sampleFn.json(prompt, { modelTier: 'quick' });
@@ -1355,6 +1603,7 @@
       category: CATS[e.type === 'income' ? 'income' : 'expense'].includes(e.category) ? e.category : (typeof e.category === 'string' && e.category.trim() ? e.category.trim() : 'Other'),
       date: /^\d{4}-\d{2}-\d{2}$/.test(e.date || '') ? e.date : todayISO(),
       note: String(e.note || '').slice(0, 120),
+      pocket: (state.pockets.find((p) => p.name.toLowerCase() === String(e.pocket || '').toLowerCase()) || {}).id || null,
     }));
   }
 
@@ -1403,7 +1652,7 @@
     try {
       for (let i = 0; i < good.length; i++) {
         const p = good[i];
-        await store.put({ id: uid(), type: p.type, amount: p.amount, category: p.category, date: p.date, note: p.note, createdAt: now + i, currency: p.currency || state.currency, ...(p.rate ? { rate: p.rate, rateBase: p.rateBase } : {}) });
+        await store.put({ id: uid(), type: p.type, amount: p.amount, category: p.category, date: p.date, note: p.note, createdAt: now + i, currency: p.currency || state.currency, ...(p.rate ? { rate: p.rate, rateBase: p.rateBase } : {}), ...(p.pocket && pocketById(p.pocket) ? { pocket: p.pocket } : {}) });
       }
       state.ym = ymOf(good[good.length - 1].date);
       $('quick').value = '';
@@ -1455,7 +1704,7 @@
 
   const curSel = $('currency');
   curSel.innerHTML = CURRENCIES.map((c) => `<option value="${c}">${c}</option>`).join('');
-  const saveSettings = async () => { try { await store.setSettings({ currency: state.currency, payCycle: state.payCycle, rates: state.rates, ratesUpdated: state.ratesUpdated }); } catch (e) { console.error(e); } };
+  const saveSettings = async () => { if (!store) return; try { await store.setSettings({ currency: state.currency, payCycle: state.payCycle, rates: state.rates, ratesUpdated: state.ratesUpdated, pockets: state.pockets }); } catch (e) { console.error(e); } };
   // Changing the home currency re-expresses every rate relative to the new one.
   function rebase(newBase) {
     const old = state.currency;
@@ -1493,6 +1742,11 @@
       state.rates = {};
       for (const [c, v] of Object.entries(s.rates)) if (CURRENCIES.includes(c) && typeof v === 'number' && v > 0) state.rates[c] = v;
       state.ratesUpdated = typeof s.ratesUpdated === 'string' ? s.ratesUpdated : '';
+    }
+    if (Array.isArray(s.pockets)) {
+      state.pockets = s.pockets
+        .filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string')
+        .map((p) => ({ id: p.id, name: p.name, emoji: p.emoji || '🏦', currency: CURRENCIES.includes(p.currency) ? p.currency : state.currency, opening: Number(p.opening) || 0, since: /^\d{4}-\d{2}-\d{2}$/.test(p.since || '') ? p.since : '' }));
     }
   }
 
