@@ -85,6 +85,10 @@
   }
 
   * { box-sizing: border-box; }
+  /* Class rules below set `display`, which beats the browser's own [hidden] rule.
+     Without this line, elements toggled with el.hidden (the sign-in screen, the
+     export buttons, the delete button) stay on screen. */
+  [hidden] { display: none !important; }
   html { background: var(--ground); }
   body {
     margin: 0;
@@ -130,6 +134,13 @@
   /* Month nav */
   .monthbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .monthnav { display: flex; align-items: center; gap: 6px; }
+  /* Scrollable month picker: every month you can jump to, in one row. */
+  .mstrip { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; padding: 2px 2px 8px; scrollbar-width: thin; }
+  .mstrip button { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
+  .mstrip button:hover { border-color: var(--muted); }
+  .mstrip button.empty { color: var(--muted); }
+  .mstrip button.now { border-color: var(--accent); }
+  .mstrip button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .monthnav h2 { font-family: "Newsreader", Georgia, serif; font-weight: 400; font-size: 26px; margin: 0 6px; min-width: 190px; text-align: center; line-height: 1.1; }
   .iconbtn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); display: inline-grid; place-items: center; padding: 0; }
   .iconbtn:hover { border-color: var(--muted); }
@@ -192,6 +203,8 @@
   .chart-wrap .base { stroke: var(--line-strong); stroke-width: 1; }
   .chart-wrap rect.bar { transition: opacity 120ms; }
   .chart-wrap g.month:hover rect.bar { opacity: 0.85; }
+  .chart-wrap g.month { cursor: pointer; }
+  .chart-wrap g.month.cur { cursor: default; }   /* already the month on screen: clicking it does nothing */
   .chart-wrap rect.hit { fill: transparent; }
   .chart-wrap .cur text { fill: var(--ink); font-weight: 500; }
   .tip {
@@ -409,6 +422,8 @@
     </div>
   </div>
 
+  <div class="mstrip" id="mstrip" aria-label="Jump to a month"></div>
+
   <section class="quick" aria-label="Quick entry">
     <form id="quick-form">
       <label class="sr" for="quick">Type an entry</label>
@@ -433,7 +448,7 @@
   <div class="row2">
     <section class="panel">
       <div class="panel-head">
-        <h3>📊 Last six months</h3>
+        <h3 id="chart-title">📊 Last six months</h3>
         <div class="legend"><span><i style="background: var(--income)"></i><span id="legend-inc">Income</span></span><span><i style="background: var(--expense)"></i>Expenses</span></div>
       </div>
       <div class="chart-wrap" id="chart"></div>
@@ -813,6 +828,7 @@
       notice.innerHTML = '👋 <b>Showing example entries.</b> Nothing has been saved yet. Add your first entry and these examples disappear.';
     } else notice.hidden = true;
 
+    renderStrip(list, ym);
     renderStats(list, ym);
     renderChart(list, ym);
     renderCats(list, ym);
@@ -820,6 +836,38 @@
     renderFX();
     $('count').textContent = state.sample ? '' : `${state.tx.length} ${state.tx.length === 1 ? 'entry' : 'entries'} recorded`;
   }
+
+  // A row of month chips: every month from the oldest entry (or six months back)
+  // through this month, so you can always get forward again, not only backward.
+  let stripSig = '';
+  function renderStrip(list, ym) {
+    const now = ymOf(todayISO());
+    const withData = new Set(list.map((t) => ymOf(t.date)));
+    let first = shiftYM(now, -5), last = now;
+    for (const m of withData) { if (m < first) first = m; if (m > last) last = m; }
+    if (ym < first) first = ym;
+    if (ym > last) last = ym;
+    const months = [];
+    for (let m = first; m <= last && months.length < 120; m = shiftYM(m, 1)) months.push(m);
+    const strip = $('mstrip');
+    const sig = months.join(',') + '|' + ym + '|' + [...withData].sort().join(',');
+    if (sig !== stripSig) {
+      stripSig = sig;
+      strip.innerHTML = months.map((m) => {
+        const [y, mm] = m.split('-').map(Number);
+        const label = (mm === 1 || m === months[0]) ? `${MONTHS[mm - 1].slice(0, 3)} ${y}` : MONTHS[mm - 1].slice(0, 3);
+        const cls = [withData.has(m) ? '' : 'empty', m === now ? 'now' : ''].filter(Boolean).join(' ');
+        return `<button type="button" class="${cls}" data-m="${m}" aria-current="${m === ym}">${esc(label)}</button>`;
+      }).join('');
+      const sel = strip.querySelector('[aria-current="true"]');
+      // Centre the selected chip without scrolling the page itself.
+      if (sel) strip.scrollLeft = sel.offsetLeft - strip.clientWidth / 2 + sel.offsetWidth / 2;
+    }
+  }
+  $('mstrip').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-m]');
+    if (b) { state.ym = b.dataset.m; render(); }
+  });
 
   function renderStats(list, ym) {
     const cur = monthTotals(list, ym);
@@ -854,9 +902,21 @@
     const step = f <= 1 ? 0.25 : f <= 2 ? 0.5 : f <= 5 ? 1 : 2;
     return Math.ceil(f / step) * step * p;
   }
+  const monthsApart = (a, b) => { const [ay, am] = a.split('-').map(Number), [by, bm] = b.split('-').map(Number); return (by - ay) * 12 + (bm - am); };
+  // Which six months the chart draws. It keeps ending at the current month while the
+  // chosen month is inside that window, so the bars to the right of the highlighted
+  // one are real months you can click forward to, not dead space.
+  function chartWindowEnd(ym) {
+    const now = ymOf(todayISO());
+    if (ym > now) return ym;
+    return monthsApart(ym, now) <= 5 ? now : ym;
+  }
+
   function renderChart(list, ym) {
+    const end = chartWindowEnd(ym);
     const months = [];
-    for (let k = 5; k >= 0; k--) months.push(shiftYM(ym, -k));
+    for (let k = 5; k >= 0; k--) months.push(shiftYM(end, -k));
+    $('chart-title').textContent = end === ymOf(todayISO()) ? '📊 Last six months' : `📊 Six months to ${ymLabel(end)}`;
     const data = months.map((m) => ({ m, ...monthTotals(list, m) }));
     const maxV = niceMax(Math.max(...data.map((d) => Math.max(d.inc, d.exp))));
     const W = 600, H = 220, padL = 56, padR = 8, padT = 12, padB = 28;
@@ -1437,7 +1497,7 @@
   }
 
   // ---------- sign-in ----------
-  let sb = null, authMode = 'in';
+  let sb = null, authMode = 'in', startSession = null;
   function showAuth() { $('auth').hidden = false; setTimeout(() => $('a-email').focus(), 60); }
   function hideAuth() { $('auth').hidden = true; }
   function friendlyAuth(ex) {
@@ -1468,8 +1528,11 @@
         if (error) throw error;
         if (!data.session) { $('a-toggle').click(); err.classList.add('ok'); err.textContent = 'Account created. Open the confirmation email we just sent, then sign in here.'; }
       } else {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Open the ledger from here rather than waiting on the auth event, which can
+        // arrive late or not at all. startSession() only ever runs once.
+        if (data && data.session && startSession) startSession(data.session);
       }
     } catch (ex) { err.textContent = friendlyAuth(ex); }
     finally { $('a-submit').disabled = false; }
@@ -1508,17 +1571,19 @@
     if (window.supabase && SUPABASE_URL) {
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       let started = false;
-      const start = async (session) => {
-        if (started) return; started = true;
+      const start = (session) => {
+        if (started || !session || !session.user) return; started = true;
         hideAuth(); $('signout').hidden = false;
-        await startStore(supabaseBackend(sb, session.user.id), `☁️ Signed in as ${session.user.email}. Synced across your devices.`);
+        startStore(supabaseBackend(sb, session.user.id), `☁️ Signed in as ${session.user.email}. Synced across your devices.`);
       };
+      startSession = start;
       sb.auth.onAuthStateChange((event, session) => {
-        if (session && !started) start(session);
+        // Supabase holds a lock while this runs, so never call back into it from here.
+        if (session) setTimeout(() => start(session), 0);
         if (event === 'SIGNED_OUT') location.reload();
       });
       const { data } = await sb.auth.getSession();
-      if (data && data.session) await start(data.session); else showAuth();
+      if (data && data.session) start(data.session); else showAuth();
       return;
     }
     await startStore(localBackend(), '💾 Saved on this device only. Use Export and Import CSV to move entries.');
