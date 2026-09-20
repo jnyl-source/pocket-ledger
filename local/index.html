@@ -138,9 +138,11 @@
   .mstrip { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; padding: 2px 2px 8px; scrollbar-width: thin; }
   .mstrip button { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
   .mstrip button:hover { border-color: var(--muted); }
-  .mstrip button.empty { color: var(--muted); }
+  .mstrip button.empty { color: var(--muted); opacity: 0.5; }        /* no entries that month */
   .mstrip button.now { border-color: var(--accent); }
-  .mstrip button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .mstrip button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; opacity: 1; }
+  .mstrip .yr { flex: 0 0 auto; display: inline-grid; place-items: center; width: 30px; padding: 0; color: var(--ink-2); }
+  .mstrip .ylabel { flex: 0 0 auto; align-self: center; font-weight: 600; font-size: 13px; color: var(--muted); padding: 0 4px; letter-spacing: 0.02em; }
   .monthnav h2 { font-family: "Newsreader", "Noto Serif Thai", Georgia, serif; font-weight: 400; font-size: 26px; margin: 0 6px; min-width: 190px; text-align: center; line-height: 1.1; }
   .iconbtn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); display: inline-grid; place-items: center; padding: 0; }
   .iconbtn:hover { border-color: var(--muted); }
@@ -251,6 +253,12 @@
   .chart-wrap g.month:hover rect.bar { opacity: 0.85; }
   .chart-wrap g.month { cursor: pointer; }
   .chart-wrap g.month.cur { cursor: default; }   /* already the month on screen: clicking it does nothing */
+  .chart-wrap .bar.dim { opacity: 0.4; }         /* every month except the one you are viewing */
+  .chart-wrap rect.sel { fill: var(--accent-soft); }
+  .chart-head { display: flex; align-items: center; gap: 2px; }
+  .iconbtn.sm { width: 28px; height: 28px; border-color: transparent; }
+  .iconbtn.sm:hover { border-color: var(--line-strong); }
+  .iconbtn.sm svg { width: 14px; height: 14px; }
   .chart-wrap rect.hit { fill: transparent; }
   .chart-wrap .cur text { fill: var(--ink); font-weight: 500; }
   .tip {
@@ -549,7 +557,11 @@
   <div class="row2">
     <section class="panel">
       <div class="panel-head">
-        <h3 id="chart-title">📊 Last six months</h3>
+        <div class="chart-head">
+          <button class="iconbtn sm" type="button" id="chart-prev" data-t-aria="prevHalf" aria-label="Earlier six months"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
+          <h3 id="chart-title">📊</h3>
+          <button class="iconbtn sm" type="button" id="chart-next" data-t-aria="nextHalf" aria-label="Later six months"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
+        </div>
         <div class="legend"><span><i style="background: var(--income)"></i><span id="legend-inc">Income</span></span><span><i style="background: var(--expense)"></i><span data-t="expenses">Expenses</span></span></div>
       </div>
       <div class="chart-wrap" id="chart"></div>
@@ -729,7 +741,8 @@
       deletePocketMsg: (name, n) => n ? `Delete "${name}"? ${n} ${n === 1 ? 'entry stays' : 'entries stay'} in your ledger, just untagged.` : `Delete "${name}"?`,
       pocketDeleted: '🗑️ Pocket deleted', errTwoPockets: 'Pick two different pockets.', errAmount: 'Enter an amount greater than zero.', errDate: 'Pick a date.',
       errRateFirst: (c) => `Add a rate for ${c} in 💱 Currencies in hand first.`, moved: (v, n) => `⇄ ${v} moved to ${n}`, errMove: 'Could not save the move. Try again.',
-      lastSix: '📊 Last six months', sixTo: (m) => `📊 Six months to ${m}`, chartAria: 'Income and expenses by month', tipPay: (m) => `${m} pay`,
+      chartRange: (a, b, y) => `📊 ${a} – ${b} ${y}`, prevHalf: 'Earlier six months', nextHalf: 'Later six months',
+      prevYear: 'Previous year', nextYear: 'Next year', chartAria: 'Income and expenses by month', tipPay: (m) => `${m} pay`,
       whereWent: '🍩 Where it went', spent: (v) => `${v} spent`, noExpenses: 'No expenses recorded this month 🌱', everythingElse: 'Everything else',
       fxTitle: '💱 Currencies in hand', quickConvert: 'Quick convert', ratesAsOf: (d) => `Rates as of ${d}`,
       homeCurRow: (c) => `Home currency. Every total on this page is in ${c}.`, unitIn: (c) => `1 unit in ${c}`, addBtn: '➕ Add',
@@ -807,7 +820,8 @@
       deletePocketMsg: (name, n) => n ? `ลบ "${name}"? รายการ ${n} รายการยังอยู่ในบัญชีตามเดิม แค่ไม่มีแท็กกระเป๋า` : `ลบ "${name}"?`,
       pocketDeleted: '🗑️ ลบกระเป๋าแล้ว', errTwoPockets: 'เลือกกระเป๋าสองใบที่ไม่ซ้ำกัน', errAmount: 'ใส่จำนวนเงินที่มากกว่าศูนย์', errDate: 'เลือกวันที่',
       errRateFirst: (c) => `เพิ่มอัตราแลกเปลี่ยน ${c} ใน 💱 สกุลเงินที่ถืออยู่ ก่อน`, moved: (v, n) => `⇄ โอน ${v} ไปยัง ${n} แล้ว`, errMove: 'บันทึกการโอนไม่สำเร็จ ลองอีกครั้ง',
-      lastSix: '📊 6 เดือนล่าสุด', sixTo: (m) => `📊 6 เดือนถึง ${m}`, chartAria: 'รายรับและรายจ่ายรายเดือน', tipPay: (m) => `เงินเดือน ${m}`,
+      chartRange: (a, b, y) => `📊 ${a} – ${b} ${y}`, prevHalf: 'หกเดือนก่อนหน้า', nextHalf: 'หกเดือนถัดไป',
+      prevYear: 'ปีก่อนหน้า', nextYear: 'ปีถัดไป', chartAria: 'รายรับและรายจ่ายรายเดือน', tipPay: (m) => `เงินเดือน ${m}`,
       whereWent: '🍩 เงินไปไหนบ้าง', spent: (v) => `ใช้ไป ${v}`, noExpenses: 'ยังไม่มีรายจ่ายเดือนนี้ 🌱', everythingElse: 'อื่นๆ ทั้งหมด',
       fxTitle: '💱 สกุลเงินที่ถืออยู่', quickConvert: 'แปลงสกุลเงิน', ratesAsOf: (d) => `อัตรา ณ ${d}`,
       homeCurRow: (c) => `สกุลเงินหลัก ยอดรวมทุกอย่างในหน้านี้เป็น ${c}`, unitIn: (c) => `1 หน่วย = กี่ ${c}`, addBtn: '➕ เพิ่ม',
@@ -893,6 +907,8 @@
     ratesUpdated: '',
     pockets: [],            // {id, name, emoji, currency, opening, since} — accounts you keep money in
     editingPocket: null,
+    chartHalf: null,        // {y, h} — which half-year the chart is showing
+    chartHalfFor: '',       // the month that half was derived from
     pocketFilter: '',       // '' every entry, 'none' only untagged, otherwise a pocket id
     tagging: false,         // ledger shows a pocket picker on each entry
     editing: null,
@@ -1234,34 +1250,34 @@
     $('count').textContent = state.sample ? '' : t('entriesRecorded', state.tx.length);
   }
 
-  // A row of month chips: every month from the oldest entry (or six months back)
-  // through this month, so you can always get forward again, not only backward.
+  // One calendar year of month chips, January to December. Months you have entries in are
+  // bright, the rest are dimmed, and the arrows at each end move a whole year.
   let stripSig = '';
+  const yearLabel = (y) => String(lang === 'th' ? y + 543 : y);
   function renderStrip(list, ym) {
     const now = ymOf(todayISO());
-    const withData = new Set(list.map((t) => ymOf(t.date)));
-    let first = shiftYM(now, -5), last = now;
-    for (const m of withData) { if (m < first) first = m; if (m > last) last = m; }
-    if (ym < first) first = ym;
-    if (ym > last) last = ym;
-    const months = [];
-    for (let m = first; m <= last && months.length < 120; m = shiftYM(m, 1)) months.push(m);
+    const withData = new Set(list.map((x) => ymOf(x.date)));
+    const year = Number(ym.split('-')[0]);
+    const months = Array.from({ length: 12 }, (_, i) => `${year}-${pad(i + 1)}`);
     const strip = $('mstrip');
-    const sig = lang + '|' + months.join(',') + '|' + ym + '|' + [...withData].sort().join(',');
+    const sig = lang + '|' + year + '|' + ym + '|' + [...withData].sort().join(',');
     if (sig !== stripSig) {
       stripSig = sig;
-      strip.innerHTML = months.map((m) => {
-        const mm = Number(m.split('-')[1]);
-        const label = (mm === 1 || m === months[0]) ? ymLabelYear(m) : ymLabel(m, true);
+      const chips = months.map((m) => {
         const cls = [withData.has(m) ? '' : 'empty', m === now ? 'now' : ''].filter(Boolean).join(' ');
-        return `<button type="button" class="${cls}" data-m="${m}" aria-current="${m === ym}">${esc(label)}</button>`;
+        return `<button type="button" class="${cls}" data-m="${m}" aria-current="${m === ym}">${esc(ymLabel(m, true))}</button>`;
       }).join('');
+      strip.innerHTML = `<button type="button" class="yr" data-yr="-1" aria-label="${esc(t('prevYear'))}">‹</button>`
+        + `<span class="ylabel">${esc(yearLabel(year))}</span>${chips}`
+        + `<button type="button" class="yr" data-yr="1" aria-label="${esc(t('nextYear'))}">›</button>`;
       const sel = strip.querySelector('[aria-current="true"]');
       // Centre the selected chip without scrolling the page itself.
       if (sel) strip.scrollLeft = sel.offsetLeft - strip.clientWidth / 2 + sel.offsetWidth / 2;
     }
   }
   $('mstrip').addEventListener('click', (e) => {
+    const yr = e.target.closest('button[data-yr]');
+    if (yr) { state.ym = shiftYM(state.ym, 12 * Number(yr.dataset.yr)); render(); return; }
     const b = e.target.closest('button[data-m]');
     if (b) { state.ym = b.dataset.m; render(); }
   });
@@ -1300,21 +1316,16 @@
     const step = f <= 1 ? 0.25 : f <= 2 ? 0.5 : f <= 5 ? 1 : 2;
     return Math.ceil(f / step) * step * p;
   }
-  const monthsApart = (a, b) => { const [ay, am] = a.split('-').map(Number), [by, bm] = b.split('-').map(Number); return (by - ay) * 12 + (bm - am); };
-  // Which six months the chart draws. It keeps ending at the current month while the
-  // chosen month is inside that window, so the bars to the right of the highlighted
-  // one are real months you can click forward to, not dead space.
-  function chartWindowEnd(ym) {
-    const now = ymOf(todayISO());
-    if (ym > now) return ym;
-    return monthsApart(ym, now) <= 5 ? now : ym;
-  }
+  // The chart always shows one half of a year: January to June, or July to December.
+  // Its own arrows step half-year by half-year; choosing a month jumps to that month's half.
+  const halfOf = (ym) => { const [y, m] = ym.split('-').map(Number); return { y, h: m <= 6 ? 1 : 2 }; };
+  const halfMonths = ({ y, h }) => Array.from({ length: 6 }, (_, i) => `${y}-${pad((h === 1 ? 1 : 7) + i)}`);
+  const shiftHalf = ({ y, h }, d) => { const n = y * 2 + (h - 1) + d; return { y: Math.floor(n / 2), h: (n % 2) + 1 }; };
 
   function renderChart(list, ym) {
-    const end = chartWindowEnd(ym);
-    const months = [];
-    for (let k = 5; k >= 0; k--) months.push(shiftYM(end, -k));
-    $('chart-title').textContent = end === ymOf(todayISO()) ? t('lastSix') : t('sixTo', ymLabel(end));
+    if (!state.chartHalf || state.chartHalfFor !== ym) { state.chartHalf = halfOf(ym); state.chartHalfFor = ym; }
+    const months = halfMonths(state.chartHalf);
+    $('chart-title').textContent = t('chartRange', ymLabel(months[0], true), ymLabel(months[5], true), yearLabel(state.chartHalf.y));
     const data = months.map((m) => ({ m, ...monthTotals(list, m) }));
     const maxV = niceMax(Math.max(...data.map((d) => Math.max(d.inc, d.exp))));
     const W = 600, H = 220, padL = 56, padR = 8, padT = 12, padB = 28;
@@ -1332,10 +1343,13 @@
       const cx = padL + slot * i + slot / 2;
       const xi = cx - barW - gap / 2, xe = cx + gap / 2;
       const hi = Math.max(0, padT + plotH - y(d.inc)), he = Math.max(0, padT + plotH - y(d.exp));
-      s += `<g class="month${d.m === ym ? ' cur' : ''}" data-i="${i}">`;
+      const isCur = d.m === ym;
+      s += `<g class="month${isCur ? ' cur' : ''}" data-i="${i}">`;
+      // A band behind the month you are viewing, so its pair of bars stands out from the rest.
+      if (isCur) s += `<rect class="sel" x="${(padL + slot * i + 2).toFixed(1)}" y="${padT}" width="${(slot - 4).toFixed(1)}" height="${plotH}" rx="8"/>`;
       s += `<rect class="hit" x="${(padL + slot * i).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${plotH}"/>`;
-      s += bar(xi, y(d.inc), barW, hi, 'var(--income)');
-      s += bar(xe, y(d.exp), barW, he, 'var(--expense)');
+      s += bar(xi, y(d.inc), barW, hi, 'var(--income)', !isCur);
+      s += bar(xe, y(d.exp), barW, he, 'var(--expense)', !isCur);
       s += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(ymLabel(d.m, true))}</text>`;
       s += '</g>';
     });
@@ -1358,10 +1372,11 @@
       g.addEventListener('click', () => { state.ym = d.m; render(); });
     });
   }
-  function bar(x, y, w, h, fill) {
-    if (h < 0.5) return `<rect class="bar" x="${x.toFixed(1)}" y="${(y - 1).toFixed(1)}" width="${w.toFixed(1)}" height="1" fill="${fill}" opacity="0.5"/>`;
+  function bar(x, y, w, h, fill, dim) {
+    const cls = 'bar' + (dim ? ' dim' : '');
+    if (h < 0.5) return `<rect class="${cls}" x="${x.toFixed(1)}" y="${(y - 1).toFixed(1)}" width="${w.toFixed(1)}" height="1" fill="${fill}" opacity="0.5"/>`;
     const r = Math.min(4, h / 2);
-    return `<path class="bar" fill="${fill}" d="M${x.toFixed(1)} ${(y + h).toFixed(1)} v${(-(h - r)).toFixed(1)} a${r} ${r} 0 0 1 ${r} ${-r} h${(w - 2 * r).toFixed(1)} a${r} ${r} 0 0 1 ${r} ${r} v${(h - r).toFixed(1)} z"/>`;
+    return `<path class="${cls}" fill="${fill}" d="M${x.toFixed(1)} ${(y + h).toFixed(1)} v${(-(h - r)).toFixed(1)} a${r} ${r} 0 0 1 ${r} ${-r} h${(w - 2 * r).toFixed(1)} a${r} ${r} 0 0 1 ${r} ${r} v${(h - r).toFixed(1)} z"/>`;
   }
 
   function renderCats(list, ym) {
@@ -1924,6 +1939,14 @@
     render();
   });
   $('pfilter').addEventListener('change', () => { state.pocketFilter = $('pfilter').value; render(); });
+  // The chart's own arrows slide the six-month window without changing the month you are viewing.
+  const slideChart = (d) => {
+    state.chartHalf = shiftHalf(state.chartHalf || halfOf(state.ym), d);
+    state.chartHalfFor = state.ym;
+    renderChart(visibleTx(), state.ym);
+  };
+  $('chart-prev').addEventListener('click', () => slideChart(-1));
+  $('chart-next').addEventListener('click', () => slideChart(1));
   // Keeps the pocket filter and the tagging button in step with the pockets you have.
   let pctrlSig = '';
   function renderPocketControls() {
