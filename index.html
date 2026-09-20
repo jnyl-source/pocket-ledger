@@ -382,7 +382,7 @@
   @media (max-width: 480px) {
     .brand h1 { font-size: 26px; }
     .monthnav h2 { min-width: 0; font-size: 22px; }
-    .tile .val { font-size: 20px; }
+    .tile .val { font-size: 21px; letter-spacing: -0.02em; }
     .search { min-width: 0; flex: 1; }
   }
   /* Safe areas: the Android app runs edge-to-edge, so the page pads itself past the status bar and gesture bar.
@@ -1100,10 +1100,22 @@
   let symbol = '$';
   function setCurrency(code) {
     state.currency = code;
+    fmtTile = null;
     symbol = symbolOf(code);
     $('f-sym').textContent = symbol;
   }
   const money = (n, code) => fmtFor(code || state.currency).format(n);
+  // The four headline figures are always in the home currency, so the short symbol (฿) is
+  // unambiguous there and keeps the number on one line on a phone.
+  let fmtTile = null;
+  function tileMoney(n) {
+    if (!fmtTile) {
+      const loc = lang === 'th' ? 'th-TH' : undefined;
+      try { fmtTile = new Intl.NumberFormat(loc, { style: 'currency', currency: state.currency, currencyDisplay: 'narrowSymbol' }); }
+      catch (e) { fmtTile = fmtFor(state.currency); }
+    }
+    return fmtTile.format(n);
+  }
   const moneyShort = (n, code) => fmtFor(code || state.currency, true).format(n);
   // 1 unit of `code` in the home currency, or null when unknown.
   const rateFor = (code) => (!code || code === state.currency) ? 1 : (state.rates[code] > 0 ? state.rates[code] : null);
@@ -1387,9 +1399,9 @@
   function renderStats(list, ym) {
     const cur = monthTotals(list, ym);
     const prev = monthTotals(list, shiftYM(ym, -1));
-    $('s-inc').textContent = money(cur.inc);
-    $('s-exp').textContent = money(cur.exp);
-    $('s-net').textContent = (cur.net < 0 ? '–' : '') + money(Math.abs(cur.net));
+    $('s-inc').textContent = tileMoney(cur.inc);
+    $('s-exp').textContent = tileMoney(cur.exp);
+    $('s-net').textContent = (cur.net < 0 ? '–' : '') + tileMoney(Math.abs(cur.net));
     $('t-net').classList.toggle('neg', cur.net < 0);
     const prevMode = state.payCycle === 'previous';
     const fundLabel = ymLabel(fundingYM(ym), true);
@@ -2134,6 +2146,7 @@
   }
   function setLang(next) {
     lang = next;
+    fmtTile = null;
     try { localStorage.setItem('pocket-ledger.lang', lang); } catch (e) { /* storage blocked */ }
     applyStatic();
     // Labels that belong to whatever is open right now.
